@@ -20,17 +20,17 @@
                 android:persistent="false" />
 
         <ListPreference
-                android:key="network_traffic_unit"
-                android:title="@string/show_network_traffic_unit"
-                android:entries="@array/show_network_traffic_unit_entries"
-                android:entryValues="@array/show_network_traffic_unit_values"
-                android:persistent="false" />
-
-        <ListPreference
                 android:key="network_traffic_period"
                 android:title="@string/show_network_traffic_frequency"
                 android:entries="@array/show_network_traffic_frequency_entries"
                 android:entryValues="@array/show_network_traffic_frequency_values"
+                android:persistent="false" />
+
+        <ListPreference
+                android:key="network_traffic_unit"
+                android:title="@string/show_network_traffic_unit"
+                android:entries="@array/show_network_traffic_unit_entries"
+                android:entryValues="@array/show_network_traffic_unit_values"
                 android:persistent="false" />
 
         <SwitchPreference

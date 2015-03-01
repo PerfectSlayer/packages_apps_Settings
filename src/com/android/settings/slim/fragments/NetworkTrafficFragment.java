@@ -31,15 +31,15 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
 
     private static final String NETWORK_TRAFFIC_DISPLAY = "network_traffic_display";
     private static final String NETWORK_TRAFFIC_MONITOR = "network_traffic_monitor";
-    private static final String NETWORK_TRAFFIC_UNIT = "network_traffic_unit";
     private static final String NETWORK_TRAFFIC_PERIOD = "network_traffic_period";
+    private static final String NETWORK_TRAFFIC_UNIT = "network_traffic_unit";
     private static final String NETWORK_TRAFFIC_AUTOHIDE = "network_traffic_autohide";
     private static final String NETWORK_TRAFFIC_AUTOHIDE_THRESHOLD = "network_traffic_autohide_threshold";
 
     private ListPreference mNetTrafficDisplay;
     private ListPreference mNetTrafficMonitor;
-    private ListPreference mNetTrafficUnit;
     private ListPreference mNetTrafficPeriod;
+    private ListPreference mNetTrafficUnit;
     private SwitchPreference mNetTrafficAutohide;
     private SeekBarPreference mNetTrafficAutohideThreshold;
 
@@ -48,8 +48,8 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
     private int MASK_TEXT;
     private int MASK_UP;
     private int MASK_DOWN;
-    private int MASK_UNIT;
     private int MASK_PERIOD;
+    private int MASK_UNIT;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -59,13 +59,19 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
 
         loadResources();
 
+        // Compute default state (meter with incoming traffic and 2s refresh period)
+        int defaultState = 0;
+        defaultState = setBit(defaultState, MASK_METER, true);
+        defaultState = setBit(defaultState, MASK_DOWN, true);
+        defaultState = setBit(defaultState, MASK_PERIOD, false) + (2000 << 16);
+
         PreferenceScreen prefSet = getPreferenceScreen();
         ContentResolver resolver = getActivity().getContentResolver();
 
         mNetTrafficDisplay = (ListPreference) prefSet.findPreference(NETWORK_TRAFFIC_DISPLAY);
         mNetTrafficMonitor = (ListPreference) prefSet.findPreference(NETWORK_TRAFFIC_MONITOR);
-        mNetTrafficUnit = (ListPreference) prefSet.findPreference(NETWORK_TRAFFIC_UNIT);
         mNetTrafficPeriod = (ListPreference) prefSet.findPreference(NETWORK_TRAFFIC_PERIOD);
+        mNetTrafficUnit = (ListPreference) prefSet.findPreference(NETWORK_TRAFFIC_UNIT);
 
         mNetTrafficAutohide =
                 (SwitchPreference) prefSet.findPreference(NETWORK_TRAFFIC_AUTOHIDE);
@@ -84,7 +90,7 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
         if (TrafficStats.getTotalTxBytes() != TrafficStats.UNSUPPORTED &&
                 TrafficStats.getTotalRxBytes() != TrafficStats.UNSUPPORTED) {
             mNetTrafficVal = Settings.System.getInt(getContentResolver(),
-                    Settings.System.NETWORK_TRAFFIC_STATE, 0);
+                    Settings.System.NETWORK_TRAFFIC_STATE, defaultState);
             int intIndex = mNetTrafficVal & (MASK_METER + MASK_TEXT);
             intIndex = mNetTrafficDisplay.findIndexOfValue(String.valueOf(intIndex));
             updateNetworkTrafficState(intIndex);
@@ -95,38 +101,23 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
 
             intIndex = mNetTrafficVal & (MASK_UP + MASK_DOWN);
             intIndex = mNetTrafficMonitor.findIndexOfValue(String.valueOf(intIndex));
-            mNetTrafficMonitor.setValueIndex(intIndex>=0? intIndex : 2);
+            mNetTrafficMonitor.setValueIndex(intIndex>=0? intIndex : 1);
             mNetTrafficMonitor.setSummary(mNetTrafficMonitor.getEntry());
             mNetTrafficMonitor.setOnPreferenceChangeListener(this);
+
+            intIndex = (mNetTrafficVal & MASK_PERIOD) >>> 16;
+            intIndex = mNetTrafficPeriod.findIndexOfValue(String.valueOf(intIndex));
+            mNetTrafficPeriod.setValueIndex(intIndex>=0 ? intIndex : 3);
+            mNetTrafficPeriod.setSummary(mNetTrafficPeriod.getEntry());
+            mNetTrafficPeriod.setOnPreferenceChangeListener(this);
 
             mNetTrafficUnit.setValueIndex(getBit(mNetTrafficVal, MASK_UNIT) ? 1 : 0);
             mNetTrafficUnit.setSummary(mNetTrafficUnit.getEntry());
             mNetTrafficUnit.setOnPreferenceChangeListener(this);
-
-            intIndex = (mNetTrafficVal & MASK_PERIOD) >>> 16;
-            intIndex = mNetTrafficPeriod.findIndexOfValue(String.valueOf(intIndex));
-            mNetTrafficPeriod.setValueIndex(intIndex>=0 ? intIndex : 1);
-            mNetTrafficPeriod.setSummary(mNetTrafficPeriod.getEntry());
-            mNetTrafficPeriod.setOnPreferenceChangeListener(this);
         }
     }
 
-    private void updateNetworkTrafficState(int mIndex) {
-        if (mIndex <= 0) {
-            mNetTrafficMonitor.setEnabled(false);
-            mNetTrafficUnit.setEnabled(false);
-            mNetTrafficPeriod.setEnabled(false);
-            mNetTrafficAutohide.setEnabled(false);
-            mNetTrafficAutohideThreshold.setEnabled(false);
-        } else {
-            mNetTrafficMonitor.setEnabled(true);
-            mNetTrafficUnit.setEnabled(true);
-            mNetTrafficPeriod.setEnabled(true);
-            mNetTrafficAutohide.setEnabled(true);
-            mNetTrafficAutohideThreshold.setEnabled(true);
-        }
-    }
-
+    @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
         if (preference == mNetTrafficDisplay) {
             int intState = Integer.valueOf((String) newValue);
@@ -147,13 +138,6 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
             int index = mNetTrafficMonitor.findIndexOfValue((String) newValue);
             mNetTrafficMonitor.setSummary(mNetTrafficMonitor.getEntries()[index]);
             return true;
-        } else if (preference == mNetTrafficUnit) {
-            mNetTrafficVal = setBit(mNetTrafficVal, MASK_UNIT, ((String)newValue).equals("1"));
-            Settings.System.putInt(getActivity().getContentResolver(),
-                    Settings.System.NETWORK_TRAFFIC_STATE, mNetTrafficVal);
-            int index = mNetTrafficUnit.findIndexOfValue((String) newValue);
-            mNetTrafficUnit.setSummary(mNetTrafficUnit.getEntries()[index]);
-            return true;
         } else if (preference == mNetTrafficPeriod) {
             int intState = Integer.valueOf((String)newValue);
             mNetTrafficVal = setBit(mNetTrafficVal, MASK_PERIOD, false) + (intState << 16);
@@ -161,6 +145,13 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
                     Settings.System.NETWORK_TRAFFIC_STATE, mNetTrafficVal);
             int index = mNetTrafficPeriod.findIndexOfValue((String) newValue);
             mNetTrafficPeriod.setSummary(mNetTrafficPeriod.getEntries()[index]);
+            return true;
+        } else if (preference == mNetTrafficUnit) {
+            mNetTrafficVal = setBit(mNetTrafficVal, MASK_UNIT, ((String)newValue).equals("1"));
+            Settings.System.putInt(getActivity().getContentResolver(),
+            Settings.System.NETWORK_TRAFFIC_STATE, mNetTrafficVal);
+            int index = mNetTrafficUnit.findIndexOfValue((String) newValue);
+            mNetTrafficUnit.setSummary(mNetTrafficUnit.getEntries()[index]);
             return true;
         } else if (preference == mNetTrafficAutohide) {
             boolean value = (Boolean) newValue;
@@ -184,6 +175,34 @@ public class NetworkTrafficFragment extends SettingsPreferenceFragment implement
         MASK_DOWN = resources.getInteger(R.integer.maskDown);
         MASK_UNIT = resources.getInteger(R.integer.maskUnit);
         MASK_PERIOD = resources.getInteger(R.integer.maskPeriod);
+    }
+
+    private void updateNetworkTrafficState(int mIndex) {
+        // Check display setting
+        if (mIndex <= 0) {
+            // Disable all settings
+            mNetTrafficMonitor.setEnabled(false);
+            mNetTrafficPeriod.setEnabled(false);
+            mNetTrafficUnit.setEnabled(false);
+            mNetTrafficAutohide.setEnabled(false);
+            mNetTrafficAutohideThreshold.setEnabled(false);
+        } else {
+            // Enable common settings
+            mNetTrafficMonitor.setEnabled(true);
+            mNetTrafficPeriod.setEnabled(true);
+            // Check meter display
+            if (mIndex==1) {
+                // Disable unsupported settings by meters
+                mNetTrafficUnit.setEnabled(false);
+                mNetTrafficAutohide.setEnabled(false);
+                mNetTrafficAutohideThreshold.setEnabled(false);
+            } else {
+                // Enable all other settings
+                mNetTrafficUnit.setEnabled(true);
+                mNetTrafficAutohide.setEnabled(true);
+                mNetTrafficAutohideThreshold.setEnabled(true);
+            }
+        }
     }
 
     private int setBit(int intNumber, int intMask, boolean blnState) {
